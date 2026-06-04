@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>出金對打計算工具</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1e2333;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --dim: #3d4358;
+    --ts: #4a9eff;
+    --ts-bg: rgba(74,158,255,0.1);
+    --ts-border: rgba(74,158,255,0.3);
+    --lu: #34d399;
+    --lu-bg: rgba(52,211,153,0.1);
+    --lu-border: rgba(52,211,153,0.3);
+    --tp: #34d399;
+    --tp-bg: rgba(52,211,153,0.08);
+    --sl: #f87171;
+    --sl-bg: rgba(248,113,113,0.08);
+    --radius: 10px;
+    --radius-lg: 14px;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Noto Sans TC', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .container { max-width: 680px; margin: 0 auto; }
+
+  /* header */
+  .header { margin-bottom: 2rem; }
+  .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 4px; }
+  .header p { font-size: 13px; color: var(--muted); font-family: var(--mono); }
+
+  /* section */
+  .section { margin-bottom: 1.5rem; }
+  .sec-label {
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    font-family: var(--mono);
+  }
+
+  /* card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+  }
+
+  /* accounts */
+  .account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .acct-item {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 12px;
+    transition: border-color .2s;
+  }
+  .acct-item:hover { border-color: var(--border2); }
+  .acct-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot-ts { background: var(--ts); }
+  .dot-lu { background: var(--lu); }
+  .acct-name { font-size: 13px; flex: 1; font-family: var(--mono); }
+  .acct-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 100px;
+    font-weight: 500; font-family: var(--mono);
+  }
+  .badge-ts { background: var(--ts-bg); color: var(--ts); border: 1px solid var(--ts-border); }
+  .badge-lu { background: var(--lu-bg); color: var(--lu); border: 1px solid var(--lu-border); }
+  .acct-del {
+    background: transparent; border: none; color: var(--dim);
+    cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
+    transition: color .2s;
+  }
+  .acct-del:hover { color: var(--sl); }
+
+  .add-btn {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--muted);
+    border: 1px dashed var(--dim); border-radius: var(--radius);
+    padding: 8px 12px; cursor: pointer; background: transparent;
+    margin-top: 8px; width: 100%; font-family: var(--sans);
+    transition: all .2s;
+  }
+  .add-btn:hover { border-color: var(--border2); color: var(--text); }
+
+  .add-form { display: none; margin-top: 10px; gap: 8px; flex-wrap: wrap; }
+  .add-form.open { display: flex; }
+  .add-form input, .add-form select {
+    font-size: 13px; padding: 7px 10px;
+    border: 1px solid var(--border2); border-radius: var(--radius);
+    background: var(--surface2); color: var(--text); font-family: var(--sans);
+  }
+  .add-form input { flex: 1; min-width: 140px; }
+  .add-form button {
+    font-size: 13px; padding: 7px 14px;
+    border: 1px solid var(--border2); border-radius: var(--radius);
+    background: var(--surface2); color: var(--text);
+    cursor: pointer; font-family: var(--sans); transition: all .2s;
+  }
+  .add-form button:hover { background: var(--surface); border-color: var(--ts-border); }
+
+  /* vs row */
+  .vs-row { display: flex; align-items: stretch; gap: 10px; margin-bottom: 14px; }
+  .vs-box {
+    flex: 1; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 10px 12px; transition: border-color .2s;
+  }
+  .vs-box.ts-side { border-color: var(--ts-border); }
+  .vs-box.lu-side { border-color: var(--lu-border); }
+  .vs-box label { font-size: 10px; color: var(--muted); display: block; margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; font-family: var(--mono); }
+  .vs-box select {
+    width: 100%; font-size: 14px; font-weight: 500;
+    background: transparent; border: none; color: var(--text);
+    outline: none; cursor: pointer; font-family: var(--mono);
+  }
+  .vs-box select option { background: var(--surface2); }
+  .vs-chip { display: flex; align-items: center; font-size: 11px; font-weight: 500; color: var(--dim); font-family: var(--mono); }
+
+  /* fields */
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .field label { font-size: 10px; color: var(--muted); display: block; margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; font-family: var(--mono); }
+  .field input {
+    width: 100%; font-size: 15px; font-weight: 500;
+    padding: 9px 12px; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--surface2);
+    color: var(--text); font-family: var(--mono); transition: border-color .2s;
+  }
+  .field input:focus { outline: none; border-color: var(--ts-border); }
+
+  /* entry big */
+  .entry-wrap { margin-bottom: 14px; }
+  .entry-wrap label { font-size: 10px; color: var(--muted); display: block; margin-bottom: 6px; letter-spacing: .1em; text-transform: uppercase; font-family: var(--mono); }
+  .entry-big {
+    width: 100%; font-size: 36px; font-weight: 500;
+    padding: 14px 20px; border: 1px solid var(--border);
+    border-radius: var(--radius-lg); background: var(--surface2);
+    color: var(--text); text-align: center;
+    letter-spacing: .06em; font-family: var(--mono);
+    transition: border-color .2s, background .2s;
+  }
+  .entry-big:focus { outline: none; border-color: var(--ts-border); background: var(--surface); }
+  .entry-big::placeholder { color: var(--dim); font-size: 24px; }
+
+  /* results */
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .res-card { border-radius: var(--radius); padding: 14px 16px; border: 1px solid transparent; }
+  .res-card.tp { background: var(--tp-bg); border-color: rgba(52,211,153,0.2); }
+  .res-card.sl { background: var(--sl-bg); border-color: rgba(248,113,113,0.2); }
+  .res-label { font-size: 10px; font-weight: 500; margin-bottom: 8px; letter-spacing: .06em; text-transform: uppercase; font-family: var(--mono); }
+  .res-card.tp .res-label { color: var(--tp); }
+  .res-card.sl .res-label { color: var(--sl); }
+  .res-price { font-size: 32px; font-weight: 500; font-family: var(--mono); margin-bottom: 5px; letter-spacing: .03em; }
+  .res-card.tp .res-price { color: var(--tp); }
+  .res-card.sl .res-price { color: var(--sl); }
+  .res-pts { font-size: 13px; font-family: var(--mono); margin-bottom: 2px; opacity: .75; }
+  .res-card.tp .res-pts { color: var(--tp); }
+  .res-card.sl .res-pts { color: var(--sl); }
+  .res-usd { font-size: 11px; font-family: var(--mono); opacity: .6; }
+  .res-card.tp .res-usd { color: var(--tp); }
+  .res-card.sl .res-usd { color: var(--sl); }
+
+  /* scenario tabs */
+  .scenario-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .s-tab {
+    flex: 1; padding: 11px 10px; border: 1px solid var(--border);
+    border-radius: var(--radius); font-size: 13px; text-align: center;
+    color: var(--muted); background: var(--surface); cursor: pointer;
+    transition: all .2s; font-family: var(--sans);
+  }
+  .s-tab:hover { border-color: var(--border2); color: var(--text); }
+  .s-tab.act-ts { border-color: var(--ts-border); background: var(--ts-bg); color: var(--ts); font-weight: 500; }
+  .s-tab.act-lu { border-color: var(--lu-border); background: var(--lu-bg); color: var(--lu); font-weight: 500; }
+
+  /* s2 block */
+  .s2-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+
+  .side-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .side-card {
+    border-radius: var(--radius); padding: 12px 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+  }
+  .side-card.ts-c { border-color: var(--ts-border); }
+  .side-card.lu-c { border-color: var(--lu-border); }
+  .side-card-title { font-size: 11px; font-weight: 500; margin-bottom: 10px; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  .side-card.ts-c .side-card-title { color: var(--ts); }
+  .side-card.lu-c .side-card-title { color: var(--lu); }
+
+  .s2-field { margin-bottom: 8px; }
+  .s2-field label { font-size: 10px; color: var(--muted); display: block; margin-bottom: 4px; letter-spacing: .05em; text-transform: uppercase; font-family: var(--mono); }
+  .s2-field input {
+    width: 100%; font-size: 14px; font-weight: 500; font-family: var(--mono);
+    padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--bg); color: var(--text);
+    transition: border-color .2s;
+  }
+  .s2-field input:focus { outline: none; border-color: var(--ts-border); }
+
+  .s2-result { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .kv { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 6px; }
+  .kv .k { font-size: 11px; color: var(--muted); flex-shrink: 0; padding-top: 4px; font-family: var(--mono); }
+  .kv-right { text-align: right; }
+  .kv-price { font-size: 20px; font-weight: 500; font-family: var(--mono); line-height: 1.2; }
+  .kv-price.tp { color: var(--tp); }
+  .kv-price.sl { color: var(--sl); }
+  .kv-pts { font-size: 11px; font-family: var(--mono); opacity: .75; margin-top: 2px; }
+  .kv-pts.tp { color: var(--tp); }
+  .kv-pts.sl { color: var(--sl); }
+  .kv-sub { font-size: 11px; margin-top: 1px; font-family: var(--mono); opacity: .8; }
+  .kv-sub.tp { color: var(--tp); }
+  .kv-sub.sl { color: var(--sl); }
+
+  .hint { font-size: 13px; color: var(--dim); padding: 8px 0; font-family: var(--mono); }
+
+  .row2-s2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 0; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+</style>
+<style>
+  #pwGate {
+    position: fixed; inset: 0; z-index: 999;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pw-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 2rem;
+    width: 320px; text-align: center;
+  }
+  .pw-box h2 { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+  .pw-box p { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-bottom: 1.5rem; }
+  .pw-input {
+    width: 100%; font-size: 28px; font-weight: 500; font-family: var(--mono);
+    padding: 12px 16px; text-align: center; letter-spacing: .2em;
+    border: 1px solid var(--border2); border-radius: var(--radius);
+    background: var(--surface2); color: var(--text);
+    margin-bottom: 12px; transition: border-color .2s;
+  }
+  .pw-input:focus { outline: none; border-color: var(--ts-border); }
+  .pw-btn {
+    width: 100%; padding: 11px; font-size: 14px; font-weight: 500;
+    border: 1px solid var(--ts-border); border-radius: var(--radius);
+    background: var(--ts-bg); color: var(--ts);
+    cursor: pointer; font-family: var(--sans); transition: all .2s;
+  }
+  .pw-btn:hover { background: rgba(74,158,255,0.2); }
+  .pw-error { font-size: 12px; color: var(--sl); font-family: var(--mono); margin-top: 10px; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<div id="pwGate">
+  <div class="pw-box">
+    <h2>出金對打計算工具</h2>
+    <p>請輸入密碼以繼續</p>
+    <input class="pw-input" type="password" id="pwInput" placeholder="••••••" maxlength="10"
+      onkeydown="if(event.key==='Enter')checkPw()" />
+    <button class="pw-btn" onclick="checkPw()">進入</button>
+    <div class="pw-error" id="pwError"></div>
+  </div>
+</div>
+
+<div class="container" id="mainApp" style="display:none">
+
+  <div class="header">
+    <h1>出金對打計算工具</h1>
+    <p>NQ $20/pt — 對打出金策略</p>
+  </div>
+
+  <!-- 帳號管理 -->
+  <div class="section">
+    <div class="sec-label">帳號管理</div>
+    <div class="card">
+      <div class="account-grid" id="acctGrid"></div>
+      <button class="add-btn" onclick="toggleAdd()">＋ 新增帳號</button>
+      <div class="add-form" id="addForm">
+        <select id="platSel"><option value="TS">TS</option><option value="LU">LU</option></select>
+        <input id="newName" placeholder="名字_編號，例如 Louis_002" />
+        <button onclick="addAcct()">新增</button>
+        <button onclick="toggleAdd()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第一次交易 -->
+  <div class="section">
+    <div class="sec-label">第一次交易</div>
+    <div class="card">
+      <div class="vs-row">
+        <div class="vs-box ts-side">
+          <label>TS 方</label>
+          <select id="sel1A"></select>
+        </div>
+        <div class="vs-chip">VS</div>
+        <div class="vs-box lu-side">
+          <label>LU 方</label>
+          <select id="sel1B"></select>
+        </div>
+      </div>
+      <div class="row3">
+        <div class="field">
+          <label>口數</label>
+          <input type="number" id="lots1" value="3" min="1" oninput="calc1()" />
+        </div>
+        <div class="field">
+          <label>止盈金額 ($)</label>
+          <input type="number" id="tp1" value="4525" oninput="calc1()" />
+        </div>
+        <div class="field">
+          <label>止損金額 ($)</label>
+          <input type="number" id="sl1" value="4525" oninput="calc1()" />
+        </div>
+      </div>
+      <div class="entry-wrap">
+        <label>進場點位</label>
+        <input type="number" class="entry-big" id="entry1" placeholder="例如 21500.00" step="0.25" oninput="calc1()" />
+      </div>
+      <div id="res1"><p class="hint">輸入進場點位後顯示結果</p></div>
+    </div>
+  </div>
+
+  <!-- 第二次交易 -->
+  <div class="section">
+    <div class="sec-label">第二次交易 — 情境選擇</div>
+    <div class="scenario-tabs">
+      <div class="s-tab act-ts" id="tabTS" onclick="setScenario('ts')">🏆 情境一：TS 勝</div>
+      <div class="s-tab" id="tabLU" onclick="setScenario('lu')">🏆 情境二：LU 勝</div>
+    </div>
+    <div class="s2-block" id="s2Block"></div>
+  </div>
+
+</div>
+
+<script>
+let accounts = [];
+let nextId = 1, scenario2 = 'ts';
+const PPT = 20, COMM = 3.5;
+
+function snap(v){ return Math.round(v * 4) / 4; }
+function fmt(n){ return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fullName(a){ return a.plat + '_' + a.name; }
+function calcPts(dollarAmt, lots){ return snap((dollarAmt - lots * COMM) / (lots * PPT)); }
+
+function renderAccounts(){
+  document.getElementById('acctGrid').innerHTML = accounts.map(a => `
+    <div class="acct-item">
+      <span class="acct-dot dot-${a.plat.toLowerCase()}"></span>
+      <span class="acct-name">${fullName(a)}</span>
+      <span class="acct-badge badge-${a.plat.toLowerCase()}">${a.plat}</span>
+      <button class="acct-del" onclick="delAcct(${a.id})" title="刪除">✕</button>
+    </div>`).join('');
+  refreshSelects();
+}
+
+function delAcct(id){ accounts = accounts.filter(a => a.id !== id); renderAccounts(); renderS2(); }
+
+function toggleAdd(){
+  const f = document.getElementById('addForm');
+  f.classList.toggle('open');
+  if(f.classList.contains('open')) document.getElementById('newName').focus();
+}
+
+function addAcct(){
+  const plat = document.getElementById('platSel').value;
+  const name = document.getElementById('newName').value.trim();
+  if(!name) return;
+  accounts.push({id: nextId++, plat, name});
+  document.getElementById('newName').value = '';
+  document.getElementById('addForm').classList.remove('open');
+  renderAccounts(); renderS2();
+}
+
+function refreshSelects(){
+  ['sel1A','sel1B','sel2A','sel2B'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const cur = el.value;
+    el.innerHTML = accounts.map(a => `<option value="${a.id}">${fullName(a)}</option>`).join('');
+    if(cur) el.value = cur;
+  });
+}
+
+function calc1(){
+  const lots = parseFloat(document.getElementById('lots1').value) || 3;
+  const tp   = parseFloat(document.getElementById('tp1').value)   || 4525;
+  const sl   = parseFloat(document.getElementById('sl1').value)   || 4525;
+  const entry = parseFloat(document.getElementById('entry1').value);
+  const res = document.getElementById('res1');
+  if(!entry || isNaN(entry)){ res.innerHTML = '<p class="hint">輸入進場點位後顯示結果</p>'; return; }
+
+  const tpPts = calcPts(tp, lots);
+  const slPts = calcPts(sl, lots);
+  const e = snap(entry);
+  const tpPrice = snap(e + tpPts);
+  const slPrice = snap(e - slPts);
+  const tpGross = tpPts * lots * PPT;
+  const slGross = slPts * lots * PPT;
+
+  res.innerHTML = `
+    <div class="result-grid">
+      <div class="res-card tp">
+        <div class="res-label">↑ 止盈掛單點位</div>
+        <div class="res-price">${fmt(tpPrice)}</div>
+        <div class="res-pts">+${fmt(tpPts)} pts（差距）</div>
+        <div class="res-usd">毛利 $${fmt(tpGross)} ｜ 淨利 $${fmt(tpGross - lots * COMM)}</div>
+      </div>
+      <div class="res-card sl">
+        <div class="res-label">↓ 止損掛單點位</div>
+        <div class="res-price">${fmt(slPrice)}</div>
+        <div class="res-pts">-${fmt(slPts)} pts（差距）</div>
+        <div class="res-usd">毛損 $${fmt(slGross)} ｜ 淨損 $${fmt(slGross + lots * COMM)}</div>
+      </div>
+    </div>`;
+}
+
+// 情境一 TS勝：TS 止盈4525/止損5225，LU 止盈5225/止損4525
+// 情境二 LU勝：TS 止盈9000/止損725， LU 止盈725/止損9000
+const S2_CFG = {
+  ts: {tsTP:4525, tsSL:5225, lsTP:5225, lsSL:4525},
+  lu: {tsTP:9000, tsSL:725,  lsTP:725,  lsSL:9000}
+};
+
+function setScenario(s){
+  scenario2 = s;
+  document.getElementById('tabTS').className = 's-tab' + (s==='ts' ? ' act-ts' : '');
+  document.getElementById('tabLU').className = 's-tab' + (s==='lu' ? ' act-lu' : '');
+  renderS2();
+}
+
+function renderS2(){
+  const cfg = S2_CFG[scenario2];
+  const aOpts = accounts.map(a => `<option value="${a.id}">${fullName(a)}</option>`).join('');
+  const isTS = scenario2 === 'ts';
+  document.getElementById('s2Block').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:11px;padding:3px 10px;border-radius:100px;font-weight:500;font-family:var(--mono);
+        background:${isTS?'var(--ts-bg)':'var(--lu-bg)'};
+        color:${isTS?'var(--ts)':'var(--lu)'};
+        border:1px solid ${isTS?'var(--ts-border)':'var(--lu-border)'}">
+        ${isTS ? 'TS 方勝出' : 'LU 方勝出'}
+      </span>
+    </div>
+    <div class="vs-row">
+      <div class="vs-box ts-side"><label>TS 方帳號</label><select id="sel2A">${aOpts}</select></div>
+      <div class="vs-chip">VS</div>
+      <div class="vs-box lu-side"><label>LU 方帳號</label><select id="sel2B">${aOpts}</select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="field">
+        <label>口數</label>
+        <input type="number" id="lots2" value="3" min="1" oninput="calcS2()" />
+      </div>
+    </div>
+    <div class="entry-wrap">
+      <label>進場點位</label>
+      <input type="number" class="entry-big" id="entry2" placeholder="例如 21500.00" step="0.25" oninput="calcS2()" />
+    </div>
+    <div class="side-pair" id="sidePair">
+      ${buildSideCard('ts', cfg.tsTP, cfg.tsSL, null, 3)}
+      ${buildSideCard('lu', cfg.lsTP, cfg.lsSL, null, 3)}
+    </div>`;
+}
+
+function buildSideCard(side, tpDefault, slDefault, entry, lots){
+  const custTP = document.getElementById('s2tp_' + side);
+  const custSL = document.getElementById('s2sl_' + side);
+  const tpAmt = (custTP && custTP.value !== '') ? parseFloat(custTP.value) : tpDefault;
+  const slAmt = (custSL && custSL.value !== '') ? parseFloat(custSL.value) : slDefault;
+  const tpPts = calcPts(tpAmt, lots);
+  const slPts = calcPts(slAmt, lots);
+  const hasEntry = entry && !isNaN(entry) && entry > 0;
+  const tpPrice = hasEntry ? snap(side==='ts' ? entry+tpPts : entry-tpPts) : null;
+  const slPrice = hasEntry ? snap(side==='ts' ? entry-slPts : entry+slPts) : null;
+  const tpGross = tpPts * lots * PPT;
+  const slGross = slPts * lots * PPT;
+  const cls   = side==='ts' ? 'ts-c' : 'lu-c';
+  const label = side==='ts' ? 'TS 方' : 'LU 方';
+  return `<div class="side-card ${cls}">
+    <div class="side-card-title">${label}</div>
+    <div class="s2-field">
+      <label>止盈金額 ($)</label>
+      <input type="number" id="s2tp_${side}" value="${tpDefault}" step="1" oninput="calcS2()" />
+    </div>
+    <div class="s2-field">
+      <label>止損金額 ($)</label>
+      <input type="number" id="s2sl_${side}" value="${slDefault}" step="1" oninput="calcS2()" />
+    </div>
+    <div class="s2-result">
+      <div class="kv">
+        <span class="k">止盈掛單</span>
+        <div class="kv-right">
+          ${hasEntry ? `<div class="kv-price tp">${fmt(tpPrice)}</div>` : '<div class="kv-price tp">—</div>'}
+          <div class="kv-pts tp">+${fmt(tpPts)} pts ｜ 淨利 $${fmt(tpGross - lots * COMM)}</div>
+        </div>
+      </div>
+      <div class="kv">
+        <span class="k">止損掛單</span>
+        <div class="kv-right">
+          ${hasEntry ? `<div class="kv-price sl">${fmt(slPrice)}</div>` : '<div class="kv-price sl">—</div>'}
+          <div class="kv-pts sl">-${fmt(slPts)} pts ｜ 淨損 $${fmt(slGross + lots * COMM)}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function calcS2(){
+  const cfg = S2_CFG[scenario2];
+  const entry = parseFloat(document.getElementById('entry2').value);
+  const lots  = parseFloat(document.getElementById('lots2').value) || 3;
+  const hasEntry = !isNaN(entry) && entry > 0;
+  document.getElementById('sidePair').innerHTML =
+    buildSideCard('ts', cfg.tsTP, cfg.tsSL, hasEntry ? entry : null, lots) +
+    buildSideCard('lu', cfg.lsTP, cfg.lsSL, hasEntry ? entry : null, lots);
+}
+
+function checkPw(){
+  const val = document.getElementById('pwInput').value;
+  if(val === '771112'){
+    document.getElementById('pwGate').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    renderAccounts();
+    renderS2();
+    calc1();
+  } else {
+    const err = document.getElementById('pwError');
+    err.textContent = '密碼錯誤，請再試一次';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+    setTimeout(() => { err.textContent = ''; }, 2000);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('pwInput').focus();
+});
+</script>
+</body>
+</html>
