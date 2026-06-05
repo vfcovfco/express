@@ -239,6 +239,11 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+
+  /* hide number input spinners */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
 </style>
 <style>
   #pwGate {
@@ -301,7 +306,15 @@
       <button class="add-btn" onclick="toggleAdd()">＋ 新增帳號</button>
       <div class="add-form" id="addForm">
         <select id="platSel"><option value="TS">TS</option><option value="LU">LU</option></select>
-        <input id="newName" placeholder="名字_編號，例如 Louis_002" />
+        <select id="nameSel">
+          <option value="則儒">則儒</option>
+          <option value="昀潔">昀潔</option>
+          <option value="世學">世學</option>
+          <option value="璿皓">璿皓</option>
+          <option value="婉茹">婉茹</option>
+          <option value="芮妤">芮妤</option>
+        </select>
+        <input id="acctNum" placeholder="帳號，例如 002" style="max-width:110px" />
         <button onclick="addAcct()">新增</button>
         <button onclick="toggleAdd()">取消</button>
       </div>
@@ -330,11 +343,11 @@
         </div>
         <div class="field">
           <label>止盈金額 ($)</label>
-          <input type="number" id="tp1" value="4525" oninput="calc1()" />
+          <input type="number" id="tp1" value="4500" oninput="calc1()" />
         </div>
         <div class="field">
           <label>止損金額 ($)</label>
-          <input type="number" id="sl1" value="4525" oninput="calc1()" />
+          <input type="number" id="sl1" value="4500" oninput="calc1()" />
         </div>
       </div>
       <div class="entry-wrap">
@@ -388,20 +401,26 @@ function toggleAdd(){
 
 function addAcct(){
   const plat = document.getElementById('platSel').value;
-  const name = document.getElementById('newName').value.trim();
-  if(!name) return;
+  const nameSel = document.getElementById('nameSel').value;
+  const acctNum = document.getElementById('acctNum').value.trim();
+  if(!acctNum) return;
+  const name = nameSel + '_' + acctNum;
   accounts.push({id: nextId++, plat, name});
-  document.getElementById('newName').value = '';
+  document.getElementById('acctNum').value = '';
   document.getElementById('addForm').classList.remove('open');
   renderAccounts(); renderS2();
 }
 
 function refreshSelects(){
-  ['sel1A','sel1B','sel2A','sel2B'].forEach(id => {
+  // sel1A & sel2A = TS only, sel1B & sel2B = LU only
+  const filterMap = { sel1A:'TS', sel1B:'LU', sel2A:'TS', sel2B:'LU' };
+  Object.entries(filterMap).forEach(([id, plat]) => {
     const el = document.getElementById(id);
     if(!el) return;
     const cur = el.value;
-    el.innerHTML = accounts.map(a => `<option value="${a.id}">${fullName(a)}</option>`).join('');
+    const filtered = accounts.filter(a => a.plat === plat);
+    el.innerHTML = filtered.map(a => `<option value="${a.id}">${fullName(a)}</option>`).join('');
+    if(!el.innerHTML) el.innerHTML = `<option value="">— 無${plat}帳號 —</option>`;
     if(cur) el.value = cur;
   });
 }
@@ -442,8 +461,8 @@ function calc1(){
 // 情境一 TS勝：TS 止盈4525/止損5225，LU 止盈5225/止損4525
 // 情境二 LU勝：TS 止盈9000/止損725， LU 止盈725/止損9000
 const S2_CFG = {
-  ts: {tsTP:4525, tsSL:5225, lsTP:5225, lsSL:4525},
-  lu: {tsTP:9000, tsSL:725,  lsTP:725,  lsSL:9000}
+  ts: {tsTP:4500, tsSL:5200, lsTP:5200, lsSL:4500},
+  lu: {tsTP:9000, tsSL:700,  lsTP:700,  lsSL:9000}
 };
 
 function setScenario(s){
@@ -487,31 +506,42 @@ function renderS2(){
     </div>`;
 }
 
-function buildSideCard(side, tpDefault, slDefault, entry, lots){
-  const custTP = document.getElementById('s2tp_' + side);
-  const custSL = document.getElementById('s2sl_' + side);
-  const tpAmt = (custTP && custTP.value !== '') ? parseFloat(custTP.value) : tpDefault;
-  const slAmt = (custSL && custSL.value !== '') ? parseFloat(custSL.value) : slDefault;
-  const tpPts = calcPts(tpAmt, lots);
-  const slPts = calcPts(slAmt, lots);
-  const hasEntry = entry && !isNaN(entry) && entry > 0;
-  const tpPrice = hasEntry ? snap(side==='ts' ? entry+tpPts : entry-tpPts) : null;
-  const slPrice = hasEntry ? snap(side==='ts' ? entry-slPts : entry+slPts) : null;
-  const tpGross = tpPts * lots * PPT;
-  const slGross = slPts * lots * PPT;
-  const cls   = side==='ts' ? 'ts-c' : 'lu-c';
-  const label = side==='ts' ? 'TS 方' : 'LU 方';
-  return `<div class="side-card ${cls}">
-    <div class="side-card-title">${label}</div>
-    <div class="s2-field">
-      <label>止盈金額 ($)</label>
-      <input type="number" id="s2tp_${side}" value="${tpDefault}" step="1" oninput="calcS2()" />
-    </div>
-    <div class="s2-field">
-      <label>止損金額 ($)</label>
-      <input type="number" id="s2sl_${side}" value="${slDefault}" step="1" oninput="calcS2()" />
-    </div>
-    <div class="s2-result">
+// Store user-overridden amounts per scenario
+const s2State = {
+  ts: { tsTP: null, tsSL: null, lsTP: null, lsSL: null },
+  lu: { tsTP: null, tsSL: null, lsTP: null, lsSL: null }
+};
+
+function onS2AmtChange(side, field, val){
+  const key = (side === 'ts' ? 'ts' : 'ls') + (field === 'tp' ? 'TP' : 'SL');
+  const stateKey = side === 'ts'
+    ? (field === 'tp' ? 'tsTP' : 'tsSL')
+    : (field === 'tp' ? 'lsTP' : 'lsSL');
+  s2State[scenario2][stateKey] = val === '' ? null : parseFloat(val);
+  updateSideResults();
+}
+
+function updateSideResults(){
+  const cfg = S2_CFG[scenario2];
+  const entry = parseFloat(document.getElementById('entry2').value);
+  const lots  = parseFloat(document.getElementById('lots2').value) || 3;
+  const hasEntry = !isNaN(entry) && entry > 0;
+  const st = s2State[scenario2];
+
+  ['ts','lu'].forEach(side => {
+    const tpDefault = side === 'ts' ? cfg.tsTP : cfg.lsTP;
+    const slDefault = side === 'ts' ? cfg.tsSL : cfg.lsSL;
+    const tpAmt = (side === 'ts' ? st.tsTP : st.lsTP) ?? tpDefault;
+    const slAmt = (side === 'ts' ? st.tsSL : st.lsSL) ?? slDefault;
+    const tpPts = calcPts(tpAmt, lots);
+    const slPts = calcPts(slAmt, lots);
+    const tpPrice = hasEntry ? snap(side==='ts' ? entry+tpPts : entry-tpPts) : null;
+    const slPrice = hasEntry ? snap(side==='ts' ? entry-slPts : entry+slPts) : null;
+    const tpGross = tpPts * lots * PPT;
+    const slGross = slPts * lots * PPT;
+    const resEl = document.getElementById('s2res_' + side);
+    if(!resEl) return;
+    resEl.innerHTML = `
       <div class="kv">
         <span class="k">止盈掛單</span>
         <div class="kv-right">
@@ -525,19 +555,36 @@ function buildSideCard(side, tpDefault, slDefault, entry, lots){
           ${hasEntry ? `<div class="kv-price sl">${fmt(slPrice)}</div>` : '<div class="kv-price sl">—</div>'}
           <div class="kv-pts sl">-${fmt(slPts)} pts ｜ 淨損 $${fmt(slGross + lots * COMM)}</div>
         </div>
-      </div>
+      </div>`;
+  });
+}
+
+function buildSideCard(side, tpDefault, slDefault){
+  const cls   = side==='ts' ? 'ts-c' : 'lu-c';
+  const label = side==='ts' ? 'TS 方' : 'LU 方';
+  const st = s2State[scenario2];
+  const tpVal = (side === 'ts' ? st.tsTP : st.lsTP) ?? tpDefault;
+  const slVal = (side === 'ts' ? st.tsSL : st.lsSL) ?? slDefault;
+  return `<div class="side-card ${cls}">
+    <div class="side-card-title">${label}</div>
+    <div class="s2-field">
+      <label>止盈金額 ($)</label>
+      <input type="number" id="s2tp_${side}" value="${tpVal}" step="1"
+        oninput="onS2AmtChange('${side}','tp',this.value)" />
+    </div>
+    <div class="s2-field">
+      <label>止損金額 ($)</label>
+      <input type="number" id="s2sl_${side}" value="${slVal}" step="1"
+        oninput="onS2AmtChange('${side}','sl',this.value)" />
+    </div>
+    <div class="s2-result" id="s2res_${side}">
+      <div class="kv-price tp" style="color:var(--muted);font-size:13px">輸入進場點位後顯示</div>
     </div>
   </div>`;
 }
 
 function calcS2(){
-  const cfg = S2_CFG[scenario2];
-  const entry = parseFloat(document.getElementById('entry2').value);
-  const lots  = parseFloat(document.getElementById('lots2').value) || 3;
-  const hasEntry = !isNaN(entry) && entry > 0;
-  document.getElementById('sidePair').innerHTML =
-    buildSideCard('ts', cfg.tsTP, cfg.tsSL, hasEntry ? entry : null, lots) +
-    buildSideCard('lu', cfg.lsTP, cfg.lsSL, hasEntry ? entry : null, lots);
+  updateSideResults();
 }
 
 function checkPw(){
@@ -559,6 +606,13 @@ function checkPw(){
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('pwInput').focus();
+
+  // Prevent scroll wheel / trackpad from changing number inputs
+  document.addEventListener('wheel', function(e){
+    if(document.activeElement && document.activeElement.type === 'number'){
+      document.activeElement.blur();
+    }
+  }, { passive: false });
 });
 </script>
 </body>
