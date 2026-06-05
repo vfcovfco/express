@@ -235,6 +235,37 @@
 
   .row2-s2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 0; }
 
+  /* direction toggle */
+  .dir-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .dir-btn {
+    padding: 18px 10px;
+    font-size: 18px; font-weight: 500;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--dim);
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all .2s;
+    text-align: center;
+    letter-spacing: .02em;
+  }
+  .dir-btn:hover { border-color: var(--border2); color: var(--muted); }
+  .dir-btn.active-long {
+    background: rgba(52,211,153,.15);
+    border-color: rgba(52,211,153,.6);
+    color: var(--tp);
+    font-size: 20px;
+    box-shadow: 0 0 0 1px rgba(52,211,153,.2);
+  }
+  .dir-btn.active-short {
+    background: rgba(248,113,113,.15);
+    border-color: rgba(248,113,113,.6);
+    color: var(--sl);
+    font-size: 20px;
+    box-shadow: 0 0 0 1px rgba(248,113,113,.2);
+  }
+
   /* scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
@@ -243,7 +274,7 @@
   /* hide number input spinners */
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-  input[type=number] { -moz-appearance: textfield; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 </style>
 <style>
   #pwGate {
@@ -284,9 +315,8 @@
   <div class="pw-box">
     <h2>對打工具</h2>
     <p>請輸入密碼以繼續</p>
-    <input class="pw-input" type="password" id="pwInput" placeholder="••••••" maxlength="10"
-      onkeydown="if(event.key==='Enter')checkPw()" />
-    <button class="pw-btn" onclick="checkPw()">進入</button>
+    <input class="pw-input" type="password" id="pwInput" placeholder="••••••" maxlength="10" />
+    <button class="pw-btn" id="pwBtn">進入</button>
     <div class="pw-error" id="pwError"></div>
   </div>
 </div>
@@ -350,6 +380,10 @@
           <input type="number" id="sl1" value="4500" oninput="calc1()" />
         </div>
       </div>
+      <div class="dir-row">
+        <button class="dir-btn active-long" id="dir1Long" onclick="setDir1('long')">▲ 做多（買進）</button>
+        <button class="dir-btn" id="dir1Short" onclick="setDir1('short')">▼ 做空（賣出）</button>
+      </div>
       <div class="entry-wrap">
         <label>進場點位</label>
         <input type="number" class="entry-big" id="entry1" placeholder="例如 21500.00" step="0.25" oninput="calc1()" />
@@ -371,14 +405,31 @@
 </div>
 
 <script>
+function checkPw(){
+  const val = document.getElementById('pwInput').value;
+  if(val === '771112'){
+    document.getElementById('pwGate').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    renderAccounts();
+    renderS2();
+    calc1();
+  } else {
+    const err = document.getElementById('pwError');
+    err.textContent = '密碼錯誤，請再試一次';
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+    setTimeout(() => { err.textContent = ''; }, 2000);
+  }
+}
+
 let accounts = [];
-let nextId = 1, scenario2 = 'ts';
+let nextId = 1, scenario2 = 'ts', dir1 = 'long';
 const PPT = 20, COMM = 3.5;
 
 function snap(v){ return Math.round(v * 4) / 4; }
 function fmt(n){ return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 function fullName(a){ return a.plat + '_' + a.name; }
-function calcPts(dollarAmt, lots){ return snap((dollarAmt - lots * COMM) / (lots * PPT)); }
+function calcPts(dollarAmt, lots){ return snap(dollarAmt / (lots * PPT)); }
 
 function renderAccounts(){
   document.getElementById('acctGrid').innerHTML = accounts.map(a => `
@@ -425,6 +476,13 @@ function refreshSelects(){
   });
 }
 
+function setDir1(d){
+  dir1 = d;
+  document.getElementById('dir1Long').className  = 'dir-btn' + (d==='long'  ? ' active-long'  : '');
+  document.getElementById('dir1Short').className = 'dir-btn' + (d==='short' ? ' active-short' : '');
+  calc1();
+}
+
 function calc1(){
   const lots = parseFloat(document.getElementById('lots1').value) || 3;
   const tp   = parseFloat(document.getElementById('tp1').value)   || 4525;
@@ -436,8 +494,8 @@ function calc1(){
   const tpPts = calcPts(tp, lots);
   const slPts = calcPts(sl, lots);
   const e = snap(entry);
-  const tpPrice = snap(e + tpPts);
-  const slPrice = snap(e - slPts);
+  const tpPrice = snap(dir1==='long' ? e + tpPts : e - tpPts);
+  const slPrice = snap(dir1==='long' ? e - slPts : e + slPts);
   const tpGross = tpPts * lots * PPT;
   const slGross = slPts * lots * PPT;
 
@@ -447,13 +505,13 @@ function calc1(){
         <div class="res-label">↑ 止盈掛單點位</div>
         <div class="res-price">${fmt(tpPrice)}</div>
         <div class="res-pts">+${fmt(tpPts)} pts（差距）</div>
-        <div class="res-usd">毛利 $${fmt(tpGross)} ｜ 淨利 $${fmt(tpGross - lots * COMM)}</div>
+        <div class="res-usd">金額 $${fmt(tpGross)}</div>
       </div>
       <div class="res-card sl">
         <div class="res-label">↓ 止損掛單點位</div>
         <div class="res-price">${fmt(slPrice)}</div>
         <div class="res-pts">-${fmt(slPts)} pts（差距）</div>
-        <div class="res-usd">毛損 $${fmt(slGross)} ｜ 淨損 $${fmt(slGross + lots * COMM)}</div>
+        <div class="res-usd">金額 $${fmt(slGross)}</div>
       </div>
     </div>`;
 }
@@ -472,10 +530,26 @@ function setScenario(s){
   renderS2();
 }
 
+let dir2 = 'long';
+
+function setDir2(d){
+  dir2 = d;
+  const lBtn = document.getElementById('dir2Long');
+  const sBtn = document.getElementById('dir2Short');
+  if(lBtn) lBtn.className = 'dir-btn' + (d==='long'  ? ' active-long'  : '');
+  if(sBtn) sBtn.className = 'dir-btn' + (d==='short' ? ' active-short' : '');
+  updateSideResults();
+}
+
 function renderS2(){
   const cfg = S2_CFG[scenario2];
-  const aOpts = accounts.map(a => `<option value="${a.id}">${fullName(a)}</option>`).join('');
   const isTS = scenario2 === 'ts';
+  const tsAccts = accounts.filter(a=>a.plat==='TS');
+  const luAccts = accounts.filter(a=>a.plat==='LU');
+  const tsOpts = tsAccts.length ? tsAccts.map(a=>`<option value="${a.id}">${fullName(a)}</option>`).join('') : '<option value="">— 無TS帳號 —</option>';
+  const luOpts = luAccts.length ? luAccts.map(a=>`<option value="${a.id}">${fullName(a)}</option>`).join('') : '<option value="">— 無LU帳號 —</option>';
+  const allOpts = accounts.map(a=>`<option value="${a.id}">${fullName(a)}</option>`).join('');
+  const selBg = 'width:100%;font-size:14px;font-weight:500;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-family:var(--mono)';
   document.getElementById('s2Block').innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <span style="font-size:11px;padding:3px 10px;border-radius:100px;font-weight:500;font-family:var(--mono);
@@ -486,24 +560,33 @@ function renderS2(){
       </span>
     </div>
     <div class="vs-row">
-      <div class="vs-box ts-side"><label>TS 方帳號</label><select id="sel2A">${aOpts}</select></div>
+      <div class="vs-box ts-side"><label>TS 方帳號</label><select id="sel2A">${tsOpts}</select></div>
       <div class="vs-chip">VS</div>
-      <div class="vs-box lu-side"><label>LU 方帳號</label><select id="sel2B">${aOpts}</select></div>
+      <div class="vs-box lu-side"><label>LU 方帳號</label><select id="sel2B">${luOpts}</select></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <div class="field">
         <label>口數</label>
         <input type="number" id="lots2" value="3" min="1" oninput="calcS2()" />
       </div>
+      <div class="field">
+        <label>我的帳號</label>
+        <select id="myAcct2" onchange="calcS2()" style="${selBg}">${allOpts}</select>
+      </div>
+    </div>
+    <div class="dir-row" style="margin-top:4px">
+      <button class="dir-btn active-long" id="dir2Long" onclick="setDir2(\'long\')">▲ 做多（買進）</button>
+      <button class="dir-btn" id="dir2Short" onclick="setDir2(\'short\')">▼ 做空（賣出）</button>
     </div>
     <div class="entry-wrap">
       <label>進場點位</label>
       <input type="number" class="entry-big" id="entry2" placeholder="例如 21500.00" step="0.25" oninput="calcS2()" />
     </div>
     <div class="side-pair" id="sidePair">
-      ${buildSideCard('ts', cfg.tsTP, cfg.tsSL, null, 3)}
-      ${buildSideCard('lu', cfg.lsTP, cfg.lsSL, null, 3)}
+      ${buildSideCard('ts', cfg.tsTP, cfg.tsSL)}
+      ${buildSideCard('lu', cfg.lsTP, cfg.lsSL)}
     </div>`;
+  updateSideResults();
 }
 
 // Store user-overridden amounts per scenario
@@ -511,6 +594,7 @@ const s2State = {
   ts: { tsTP: null, tsSL: null, lsTP: null, lsSL: null },
   lu: { tsTP: null, tsSL: null, lsTP: null, lsSL: null }
 };
+
 
 function onS2AmtChange(side, field, val){
   const key = (side === 'ts' ? 'ts' : 'ls') + (field === 'tp' ? 'TP' : 'SL');
@@ -528,6 +612,12 @@ function updateSideResults(){
   const hasEntry = !isNaN(entry) && entry > 0;
   const st = s2State[scenario2];
 
+  // determine my side and opponent side
+  const myAcctEl = document.getElementById('myAcct2');
+  const myAcctId = myAcctEl ? parseInt(myAcctEl.value) : null;
+  const myAcct   = myAcctId ? accounts.find(a=>a.id===myAcctId) : null;
+  const myPlat   = myAcct ? myAcct.plat.toLowerCase() : null; // 'ts' or 'lu'
+
   ['ts','lu'].forEach(side => {
     const tpDefault = side === 'ts' ? cfg.tsTP : cfg.lsTP;
     const slDefault = side === 'ts' ? cfg.tsSL : cfg.lsSL;
@@ -535,25 +625,51 @@ function updateSideResults(){
     const slAmt = (side === 'ts' ? st.tsSL : st.lsSL) ?? slDefault;
     const tpPts = calcPts(tpAmt, lots);
     const slPts = calcPts(slAmt, lots);
-    const tpPrice = hasEntry ? snap(side==='ts' ? entry+tpPts : entry-tpPts) : null;
-    const slPrice = hasEntry ? snap(side==='ts' ? entry-slPts : entry+slPts) : null;
+
+    const isMe = myPlat === side;
+    const isOpp = myPlat && !isMe; // this side is the opponent
+
+    // My side uses dir2; opponent is always the reverse
+    let sideDir;
+    if(!myPlat){
+      sideDir = dir2; // no account selected, both follow dir2
+    } else if(isMe){
+      sideDir = dir2;
+    } else {
+      sideDir = dir2 === 'long' ? 'short' : 'long'; // opponent is opposite
+    }
+
+    const tpPrice = hasEntry ? snap(sideDir==='long' ? entry+tpPts : entry-tpPts) : null;
+    const slPrice = hasEntry ? snap(sideDir==='long' ? entry-slPts : entry+slPts) : null;
     const tpGross = tpPts * lots * PPT;
     const slGross = slPts * lots * PPT;
     const resEl = document.getElementById('s2res_' + side);
     if(!resEl) return;
+
+    const meBadge = isMe
+      ? '<span style="font-size:11px;padding:2px 9px;border-radius:100px;background:rgba(255,200,50,.15);color:#f5c842;border:1px solid rgba(245,200,66,.35);font-family:var(--mono);font-weight:500">我的帳號</span>'
+      : (isOpp ? '<span style="font-size:11px;padding:2px 9px;border-radius:100px;background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--border);font-family:var(--mono)">對方</span>' : '');
+
+    const dirColor = sideDir==='long' ? 'var(--tp)' : 'var(--sl)';
+    const dirText  = sideDir==='long' ? '▲ 做多' : '▼ 做空';
+    const dirLabel = `<span style="font-size:13px;font-weight:500;color:${dirColor};font-family:var(--mono)">${dirText}</span>`;
+
     resEl.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        ${dirLabel} ${meBadge}
+      </div>
       <div class="kv">
         <span class="k">止盈掛單</span>
         <div class="kv-right">
           ${hasEntry ? `<div class="kv-price tp">${fmt(tpPrice)}</div>` : '<div class="kv-price tp">—</div>'}
-          <div class="kv-pts tp">+${fmt(tpPts)} pts ｜ 淨利 $${fmt(tpGross - lots * COMM)}</div>
+          <div class="kv-pts tp">+${fmt(tpPts)} pts ｜ $${fmt(tpGross)}</div>
         </div>
       </div>
       <div class="kv">
         <span class="k">止損掛單</span>
         <div class="kv-right">
           ${hasEntry ? `<div class="kv-price sl">${fmt(slPrice)}</div>` : '<div class="kv-price sl">—</div>'}
-          <div class="kv-pts sl">-${fmt(slPts)} pts ｜ 淨損 $${fmt(slGross + lots * COMM)}</div>
+          <div class="kv-pts sl">-${fmt(slPts)} pts ｜ $${fmt(slGross)}</div>
         </div>
       </div>`;
   });
@@ -566,7 +682,9 @@ function buildSideCard(side, tpDefault, slDefault){
   const tpVal = (side === 'ts' ? st.tsTP : st.lsTP) ?? tpDefault;
   const slVal = (side === 'ts' ? st.tsSL : st.lsSL) ?? slDefault;
   return `<div class="side-card ${cls}">
-    <div class="side-card-title">${label}</div>
+    <div style="margin-bottom:10px">
+      <div class="side-card-title" style="margin-bottom:0">${label}</div>
+    </div>
     <div class="s2-field">
       <label>止盈金額 ($)</label>
       <input type="number" id="s2tp_${side}" value="${tpVal}" step="1"
@@ -578,7 +696,7 @@ function buildSideCard(side, tpDefault, slDefault){
         oninput="onS2AmtChange('${side}','sl',this.value)" />
     </div>
     <div class="s2-result" id="s2res_${side}">
-      <div class="kv-price tp" style="color:var(--muted);font-size:13px">輸入進場點位後顯示</div>
+      <div style="color:var(--muted);font-size:13px">輸入進場點位後顯示</div>
     </div>
   </div>`;
 }
@@ -587,32 +705,19 @@ function calcS2(){
   updateSideResults();
 }
 
-function checkPw(){
-  const val = document.getElementById('pwInput').value;
-  if(val === '771112'){
-    document.getElementById('pwGate').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
-    renderAccounts();
-    renderS2();
-    calc1();
-  } else {
-    const err = document.getElementById('pwError');
-    err.textContent = '密碼錯誤，請再試一次';
-    document.getElementById('pwInput').value = '';
-    document.getElementById('pwInput').focus();
-    setTimeout(() => { err.textContent = ''; }, 2000);
-  }
-}
-
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('pwInput').focus();
+  const pwInput = document.getElementById('pwInput');
+  const pwBtn   = document.getElementById('pwBtn');
+  if(pwInput) pwInput.focus();
+  if(pwBtn)   pwBtn.addEventListener('click', checkPw);
+  if(pwInput) pwInput.addEventListener('keydown', function(e){ if(e.key==='Enter') checkPw(); });
 
-  // Prevent scroll wheel / trackpad from changing number inputs
+  // Prevent scroll wheel / trackpad from changing number inputs only
   document.addEventListener('wheel', function(e){
     if(document.activeElement && document.activeElement.type === 'number'){
       document.activeElement.blur();
     }
-  }, { passive: false });
+  }, { passive: true });
 });
 </script>
 </body>
